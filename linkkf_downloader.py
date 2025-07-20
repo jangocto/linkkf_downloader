@@ -4,6 +4,56 @@ import os
 import subprocess
 import re
 
+
+def check_url_validity(video_id, episode_num):
+    """
+    yt-dlp를 사용하여 m3u8 비디오 URL이 실제로 다운로드 가능한지 검증합니다.
+    """
+    bids = ['b2k38', 'b2k03']  # 지원하는 bid 목록
+    video_types = ['dvd', 'm']  # 지원하는 비디오 타입 목록
+    referer_url = "https://linkkf.net/"  # Referer URL은 linkkf.net로 설정
+
+    print(f"Checking URL validity for episode {episode_num} (Video ID: {video_id})...")
+
+    for bid in bids:
+        for video_type in video_types:
+            video_url = f"https://gg.myani.app/{bid}/m3u8/{video_id}{video_type}{episode_num}.m3u8"
+            print(f"Attempting to validate: {video_url}")
+
+            try:
+                # yt-dlp를 사용하여 URL 유효성 검증
+                # --simulate: 다운로드를 시뮬레이션만 하고 실제 저장하지 않음
+                # --referer: Referer 헤더를 포함하여 접근
+                # --quiet: yt-dlp의 출력을 최소화
+                # --skip-download: 다운로드를 건너뜀 (simulate과 함께 사용하면 더 확실)
+                yt_dlp_command = [
+                    "yt-dlp",
+                    "--simulate",
+                    "--skip-download", # 시뮬레이션과 함께 사용하여 다운로드 시도를 확실히 막음
+                    "--quiet",         # yt-dlp의 일반적인 출력을 숨김
+                    "--referer", referer_url, # Referer 필수
+                    video_url
+                ]
+                
+                # subprocess.run 실행 시 check=True를 사용하여 오류 발생 시 CalledProcessError 발생
+                subprocess.run(yt_dlp_command, check=True, text=True, capture_output=True)
+                
+                # 오류 없이 실행되면 해당 bid와 video_type이 유효하다고 판단
+                print(f"Validation successful for: {video_url}")
+                return bid, video_type
+            except subprocess.CalledProcessError as e:
+                # yt-dlp가 오류를 반환하면 (예: URL을 찾을 수 없거나 스트림이 유효하지 않음)
+                # 다음 bid/video_type 조합을 시도
+                print(f"Validation failed for {video_url}: {e.stderr.strip()}")
+                continue
+            except FileNotFoundError:
+                print("ERROR: yt-dlp를 찾을 수 없습니다. yt-dlp가 시스템 PATH에 설정되어 있거나 실행 파일이 현재 디렉토리에 있는지 확인하세요.")
+                return None, None # yt-dlp가 없으면 더 이상 진행할 수 없음
+
+    print("No valid video URL found with the given bids and types.")
+    return None, None # 모든 조합이 실패했을 때
+
+
 def sanitize_filename(name):
     """폴더 및 파일 이름으로 사용할 수 없는 문자를 제거하거나 대체합니다."""
     # Windows에서 허용되지 않는 문자: \ / : * ? " < > |
@@ -20,9 +70,10 @@ def download_video_and_subtitle(episode_title, video_id, episode_num, base_downl
     video_output_path = os.path.join(base_download_dir, f"{episode_num}.mp4")
     subtitle_output_path = os.path.join(base_download_dir, f"{episode_num}.vtt")
 
-    # 비디오 URL 생성 (예: https://gg.myani.app/b2k38/m3u8/383518dvd1.m3u8)
-    video_url = f"https://gg.myani.app/b2k38/m3u8/{video_id}dvd{episode_num}.m3u8"
-    # 자막 URL 생성 (예: https://2.sub2.top/s/383518dvd1.vtt)
+    bid, video_type = check_url_validity(video_id, episode_num)
+
+
+    video_url = f"https://gg.myani.app/{bid}/m3u8/{video_id}{video_type}{episode_num}.m3u8"
     subtitle_url = f"https://2.sub2.top/s/{video_id}dvd{episode_num}.vtt"
 
     print(f"\n--- 에피소드: {episode_title} ({episode_num}화) ---")
