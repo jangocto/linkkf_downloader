@@ -40,6 +40,7 @@ def check_url_validity(video_id, episode_num):
                 
                 # 오류 없이 실행되면 해당 bid와 video_type이 유효하다고 판단
                 print(f"Validation successful for: {video_url}")
+
                 return bid, video_type
             except subprocess.CalledProcessError as e:
                 # yt-dlp가 오류를 반환하면 (예: URL을 찾을 수 없거나 스트림이 유효하지 않음)
@@ -74,7 +75,7 @@ def download_video_and_subtitle(episode_title, video_id, episode_num, base_downl
 
 
     video_url = f"https://gg.myani.app/{bid}/m3u8/{video_id}{video_type}{episode_num}.m3u8"
-    subtitle_url = f"https://2.sub2.top/s/{video_id}dvd{episode_num}.vtt"
+    subtitle_url = f"https://2.sub2.top/s/{video_id}{video_type}{episode_num}.vtt"
 
     print(f"\n--- 에피소드: {episode_title} ({episode_num}화) ---")
     print(f"비디오 URL: {video_url}")
@@ -90,8 +91,9 @@ def download_video_and_subtitle(episode_title, video_id, episode_num, base_downl
             video_url
         ]
         # yt-dlp 진행 상황을 콘솔에 직접 출력하기 위해 capture_output=True 제거
-        subprocess.run(yt_dlp_command, check=True, text=True) # text=True는 에러 메시지 캡처 시 필요
-        print(f"'{episode_title}' 비디오 다운로드 완료: {video_output_path}")
+        if not os.path.exists(video_output_path):
+            subprocess.run(yt_dlp_command, check=True, text=True) # text=True는 에러 메시지 캡처 시 필요
+            print(f"'{episode_title}' 비디오 다운로드 완료: {video_output_path}")
     except subprocess.CalledProcessError as e:
         print(f"ERROR: '{episode_title}' 비디오 다운로드 실패. 오류: {e}")
         # capture_output=True가 없으므로 e.stdout/e.stderr는 비어 있을 수 있습니다.
@@ -106,6 +108,10 @@ def download_video_and_subtitle(episode_title, video_id, episode_num, base_downl
         response = requests.get(subtitle_url, headers=headers, stream=True)
         response.raise_for_status() # HTTP 오류가 발생하면 예외 발생
 
+        if os.path.exists(subtitle_output_path):
+            print(f"'{episode_title}' 자막 파일이 이미 존재합니다. 덮어쓰지 않습니다: {subtitle_output_path}")
+            return
+        
         with open(subtitle_output_path, 'wb') as f:
             for chunk in response.iter_content(chunk_size=8192):
                 f.write(chunk)
