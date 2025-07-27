@@ -4,52 +4,47 @@ import os
 import subprocess
 import re
 
+G_BID = None
+G_VIDEO_TYPE = None
 
 def check_url_validity(video_id, episode_num):
     """
     yt-dlp를 사용하여 m3u8 비디오 URL이 실제로 다운로드 가능한지 검증합니다.
     """
-    bids = ['b2k38', 'b2k03']  # 지원하는 bid 목록
+
+    global G_BID, G_VIDEO_TYPE
+
     video_types = ['dvd', 'm']  # 지원하는 비디오 타입 목록
     referer_url = "https://linkkf.net/"  # Referer URL은 linkkf.net로 설정
 
     print(f"Checking URL validity for episode {episode_num} (Video ID: {video_id})...")
 
-    for bid in bids:
+    if G_BID and G_VIDEO_TYPE:
+        url = f"https://gg.myani.app/{G_BID}/m3u8/{video_id}{G_VIDEO_TYPE}{episode_num}.m3u8"
+        res = requests.get(url, headers={"Referer": referer_url})
+        if res.status_code == 200:
+            print(f"Valid URL found: {url}")
+            return G_BID, G_VIDEO_TYPE
+        else:
+            print(f"Previously cached URL is invalid: {url}")
+            G_BID, G_VIDEO_TYPE = None, None
+
+
+    for bid in range(1, 50):
+        bid = f'b2k{bid:02d}'  # bid를 b2k01, b2k02, ..., b2k39 형식으로 생성
+
         for video_type in video_types:
-            video_url = f"https://gg.myani.app/{bid}/m3u8/{video_id}{video_type}{episode_num}.m3u8"
-            print(f"Attempting to validate: {video_url}")
+            url = f"https://gg.myani.app/{bid}/m3u8/{video_id}{video_type}{episode_num}.m3u8"
 
-            try:
-                # yt-dlp를 사용하여 URL 유효성 검증
-                # --simulate: 다운로드를 시뮬레이션만 하고 실제 저장하지 않음
-                # --referer: Referer 헤더를 포함하여 접근
-                # --quiet: yt-dlp의 출력을 최소화
-                # --skip-download: 다운로드를 건너뜀 (simulate과 함께 사용하면 더 확실)
-                yt_dlp_command = [
-                    "yt-dlp",
-                    "--simulate",
-                    "--skip-download", # 시뮬레이션과 함께 사용하여 다운로드 시도를 확실히 막음
-                    "--quiet",         # yt-dlp의 일반적인 출력을 숨김
-                    "--referer", referer_url, # Referer 필수
-                    video_url
-                ]
-                
-                # subprocess.run 실행 시 check=True를 사용하여 오류 발생 시 CalledProcessError 발생
-                subprocess.run(yt_dlp_command, check=True, text=True, capture_output=True)
-                
-                # 오류 없이 실행되면 해당 bid와 video_type이 유효하다고 판단
-                print(f"Validation successful for: {video_url}")
+            res = requests.get(url, headers={"Referer": referer_url})
 
-                return bid, video_type
-            except subprocess.CalledProcessError as e:
-                # yt-dlp가 오류를 반환하면 (예: URL을 찾을 수 없거나 스트림이 유효하지 않음)
-                # 다음 bid/video_type 조합을 시도
-                print(f"Validation failed for {video_url}: {e.stderr.strip()}")
+            if res.status_code != 200:
                 continue
-            except FileNotFoundError:
-                print("ERROR: yt-dlp를 찾을 수 없습니다. yt-dlp가 시스템 PATH에 설정되어 있거나 실행 파일이 현재 디렉토리에 있는지 확인하세요.")
-                return None, None # yt-dlp가 없으면 더 이상 진행할 수 없음
+
+            else:
+                print(f"Valid URL found: {url}")
+                return bid, video_type  # 첫 번째 타입으로 바로 반환 (유효한 경우)
+
 
     print("No valid video URL found with the given bids and types.")
     return None, None # 모든 조합이 실패했을 때
